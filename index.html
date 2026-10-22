@@ -5,7 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="A basic calculator with keyboard support, a tap-to-reuse history tape, and light and dark themes.">
 <title>Everyday Calculator</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f7a68'/%3E%3Cpath d='M9 12h14M9 20h14' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#eceff0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e1413" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Calculator">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="application-name" content="Everyday Calculator">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap">
@@ -198,10 +208,63 @@
 
   :root { padding-block: env(safe-area-inset-top, 0px) env(safe-area-inset-bottom, 0px); }
   [hidden] { display: none !important; }
+
+  /* Install prompt: one card across the top, dismissible. */
+  .install {
+    flex: 1 1 100%;
+    max-width: 780px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 12px 12px 14px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+  }
+  .install img { width: 40px; height: 40px; border-radius: 10px; flex: none; }
+  .install-text { flex: 1; min-width: 0; }
+  .install-text strong { display: block; font-weight: 600; }
+  .install-text span { display: block; color: var(--muted); font-size: 0.88rem; }
+  .install-text svg { width: 1em; height: 1em; vertical-align: -0.15em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .install-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+  .install-go {
+    appearance: none; border: 0; border-radius: 12px; padding: 10px 16px; cursor: pointer;
+    background: var(--accent); color: var(--accent-fg); font: inherit; font-weight: 600;
+  }
+  .install-go:hover { background: var(--accent-hover); }
+  .install-x {
+    appearance: none; border: 0; background: none; width: 36px; height: 36px; border-radius: 10px;
+    color: var(--muted); font-size: 1.3rem; line-height: 1; cursor: pointer;
+  }
+  .install-x:hover { background: var(--key-hover); color: var(--fg); }
+
+  .pad button { -webkit-user-select: none; user-select: none; }
+  @media (display-mode: standalone) {
+    html, body { overscroll-behavior: none; }
+    .hint { display: none; }
+  }
+  @media (max-width: 420px) {
+    body { padding-block: 16px; }
+    .install { flex-wrap: wrap; }
+    .install-text { flex-basis: calc(100% - 54px); }
+    .install-actions { margin-left: 54px; }
+  }
 </style>
 </head>
 <body>
 <main class="app">
+  <aside class="install" id="install" aria-label="Install app" hidden>
+    <img src="icons/icon-192.png" alt="">
+    <div class="install-text">
+      <strong>Install Everyday Calculator</strong>
+      <span id="installMsg">Add it to your home screen. It opens like an app and works offline.</span>
+    </div>
+    <div class="install-actions">
+      <button type="button" class="install-go" id="installGo">Install</button>
+      <button type="button" class="install-x" id="installX" aria-label="Dismiss">×</button>
+    </div>
+  </aside>
+
   <section class="calc" aria-label="Calculator">
     <div class="screen">
       <div class="expr" id="expr"></div>
@@ -460,6 +523,64 @@ function reduce(state, action, v) {
 
   renderHistory();
   renderScreen();
+})();
+
+// Offline support and install prompt.
+(function () {
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('./sw.js').catch(function () {});
+    });
+  }
+
+  var DISMISS_KEY = 'everyday-calc-install-dismissed';
+  var card = document.getElementById('install');
+  var goBtn = document.getElementById('installGo');
+  var xBtn = document.getElementById('installX');
+  var msg = document.getElementById('installMsg');
+  var deferred = null;
+
+  function installed() {
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  }
+  function dismissed() {
+    try { return localStorage.getItem(DISMISS_KEY) === '1'; } catch (e) { return false; }
+  }
+  if (installed() || dismissed()) return;
+
+  // Chrome, Edge, Samsung Internet and other Android browsers.
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    deferred = e;
+    goBtn.hidden = false;
+    card.hidden = false;
+  });
+
+  goBtn.addEventListener('click', function () {
+    if (!deferred) return;
+    deferred.prompt();
+    deferred.userChoice.finally(function () {
+      deferred = null;
+      card.hidden = true;
+    });
+  });
+
+  window.addEventListener('appinstalled', function () { card.hidden = true; });
+
+  xBtn.addEventListener('click', function () {
+    card.hidden = true;
+    try { localStorage.setItem(DISMISS_KEY, '1'); } catch (e) {}
+  });
+
+  // iPhone and iPad Safari have no install event, so show the manual steps.
+  var ua = navigator.userAgent;
+  var isIOS = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (isIOS) {
+    var share = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
+    msg.innerHTML = 'Tap Share ' + share + ' in Safari, then <b>Add to Home Screen</b>.';
+    goBtn.hidden = true;
+    card.hidden = false;
+  }
 })();
 </script>
 </body>
