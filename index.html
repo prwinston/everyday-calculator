@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="A basic calculator with keyboard support, a tap-to-reuse history tape, and light and dark themes.">
+<title>Everyday Calculator</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f7a68'/%3E%3Cpath d='M9 12h14M9 20h14' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Layout: a calculator card with a history tape beside it, stacking on phones. */
+  :root {
+    --bg: #eceff0;
+    --surface: #fafbfb;
+    --line: #d4dcda;
+    --fg: #14211f;
+    --muted: #5b6b67;
+    --key: #ffffff;
+    --key-fg: #14211f;
+    --key-hover: #f0f4f3;
+    --op: #dbe9e5;
+    --op-fg: #0b5a4d;
+    --op-hover: #cfe1dc;
+    --accent: #0f7a68;
+    --accent-hover: #0c6a5a;
+    --accent-fg: #ffffff;
+    --shadow: 0 1px 2px rgba(20, 33, 31, 0.06), 0 8px 24px rgba(20, 33, 31, 0.07);
+    color-scheme: light;
+    --font-ui: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-num: "DM Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1413;
+      --surface: #151e1d;
+      --line: #263634;
+      --fg: #e8f0ee;
+      --muted: #8aa29d;
+      --key: #1e2b29;
+      --key-fg: #e8f0ee;
+      --key-hover: #263634;
+      --op: #23403a;
+      --op-fg: #86dcc7;
+      --op-hover: #2b4d46;
+      --accent: #36b79c;
+      --accent-hover: #4cc8ad;
+      --accent-fg: #05231d;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1413;
+    --surface: #151e1d;
+    --line: #263634;
+    --fg: #e8f0ee;
+    --muted: #8aa29d;
+    --key: #1e2b29;
+    --key-fg: #e8f0ee;
+    --key-hover: #263634;
+    --op: #23403a;
+    --op-fg: #86dcc7;
+    --op-hover: #2b4d46;
+    --accent: #36b79c;
+    --accent-hover: #4cc8ad;
+    --accent-fg: #05231d;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.4;
+    padding-block: 28px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .app {
+    max-width: 720px;
+    margin: 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    align-items: flex-start;
+    justify-content: center;
+  }
+  .calc {
+    flex: 1 1 320px;
+    max-width: 380px;
+    min-width: 0;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+  }
+  .screen {
+    min-height: 112px;
+    padding: 14px 8px 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: flex-end;
+    gap: 4px;
+    overflow: hidden;
+  }
+  .expr {
+    min-height: 1.4em;
+    font-family: var(--font-num);
+    font-size: 0.95rem;
+    color: var(--muted);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .value {
+    font-family: var(--font-num);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    font-size: var(--size, 3rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-align: right;
+  }
+  .value.err { font-family: var(--font-ui); font-size: 1.4rem; letter-spacing: 0; color: var(--op-fg); }
+  .pad {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .pad button {
+    appearance: none;
+    border: 0;
+    border-radius: 16px;
+    min-height: 62px;
+    background: var(--key);
+    color: var(--key-fg);
+    font-family: var(--font-num);
+    font-size: 1.4rem;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: inset 0 0 0 1px var(--line);
+    transition: background-color 0.12s ease, transform 0.06s ease;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .pad button:hover { background: var(--key-hover); }
+  .pad button.op, .pad button.fn { background: var(--op); color: var(--op-fg); box-shadow: none; }
+  .pad button.op:hover, .pad button.fn:hover { background: var(--op-hover); }
+  .pad button.fn { font-size: 1.15rem; }
+  .pad button.eq { background: var(--accent); color: var(--accent-fg); box-shadow: none; }
+  .pad button.eq:hover { background: var(--accent-hover); }
+  .pad button.hit, .pad button:active { transform: scale(0.96); }
+  button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  .tape {
+    flex: 1 1 240px;
+    max-width: 380px;
+    min-width: 0;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    padding: 16px;
+  }
+  .tape-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+  .tape-head h2 { margin: 0; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .link-btn {
+    appearance: none; border: 0; background: none; padding: 4px 8px; border-radius: 8px;
+    font: inherit; font-size: 0.85rem; color: var(--op-fg); cursor: pointer;
+  }
+  .link-btn:hover { background: var(--op); }
+  .link-btn[hidden] { display: none; }
+  .tape ol { list-style: none; margin: 0; padding: 0; max-height: 360px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+  .tape li button {
+    appearance: none; width: 100%; border: 0; background: none; text-align: right; cursor: pointer;
+    padding: 8px 10px; border-radius: 12px; font: inherit; color: var(--fg);
+  }
+  .tape li button:hover { background: var(--key-hover); }
+  .tape .h-expr { display: block; font-family: var(--font-num); font-size: 0.82rem; color: var(--muted); overflow-wrap: anywhere; }
+  .tape .h-res { display: block; font-family: var(--font-num); font-size: 1.25rem; font-weight: 500; overflow-wrap: anywhere; }
+  .empty { margin: 0; padding: 12px 10px; color: var(--muted); font-size: 0.9rem; }
+  .hint { margin: 12px 0 0; padding-inline: 10px; color: var(--muted); font-size: 0.8rem; }
+  @media (prefers-reduced-motion: reduce) {
+    .pad button { transition: none; }
+    .pad button.hit, .pad button:active { transform: none; }
+  }
+
+  :root { padding-block: env(safe-area-inset-top, 0px) env(safe-area-inset-bottom, 0px); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main class="app">
+  <section class="calc" aria-label="Calculator">
+    <div class="screen">
+      <div class="expr" id="expr"></div>
+      <div class="value" id="value" role="status" aria-live="polite">0</div>
+    </div>
+    <div class="pad" id="pad">
+      <button type="button" class="fn" data-a="clear" data-key="Escape" aria-label="All clear">AC</button>
+      <button type="button" class="fn" data-a="back" data-key="Backspace" aria-label="Backspace">⌫</button>
+      <button type="button" class="fn" data-a="percent" data-key="%" aria-label="Percent">%</button>
+      <button type="button" class="op" data-a="op" data-v="÷" data-key="/" aria-label="Divide">÷</button>
+
+      <button type="button" data-a="digit" data-v="7" data-key="7">7</button>
+      <button type="button" data-a="digit" data-v="8" data-key="8">8</button>
+      <button type="button" data-a="digit" data-v="9" data-key="9">9</button>
+      <button type="button" class="op" data-a="op" data-v="×" data-key="*" aria-label="Multiply">×</button>
+
+      <button type="button" data-a="digit" data-v="4" data-key="4">4</button>
+      <button type="button" data-a="digit" data-v="5" data-key="5">5</button>
+      <button type="button" data-a="digit" data-v="6" data-key="6">6</button>
+      <button type="button" class="op" data-a="op" data-v="−" data-key="-" aria-label="Subtract">−</button>
+
+      <button type="button" data-a="digit" data-v="1" data-key="1">1</button>
+      <button type="button" data-a="digit" data-v="2" data-key="2">2</button>
+      <button type="button" data-a="digit" data-v="3" data-key="3">3</button>
+      <button type="button" class="op" data-a="op" data-v="+" data-key="+" aria-label="Add">+</button>
+
+      <button type="button" class="fn" data-a="sign" data-key="" aria-label="Toggle sign">±</button>
+      <button type="button" data-a="digit" data-v="0" data-key="0">0</button>
+      <button type="button" data-a="dot" data-key="." aria-label="Decimal point">.</button>
+      <button type="button" class="eq" data-a="equals" data-key="Enter" aria-label="Equals">=</button>
+    </div>
+  </section>
+
+  <aside class="tape" aria-label="History">
+    <div class="tape-head">
+      <h2>History</h2>
+      <button type="button" class="link-btn" id="clearHistory" hidden>Clear</button>
+    </div>
+    <ol id="history"></ol>
+    <p class="empty" id="historyEmpty">Finished calculations show up here. Tap one to reuse its result.</p>
+    <p class="hint">Keyboard: digits, + − * /, Enter for equals, Backspace to delete, Esc to clear.</p>
+  </aside>
+</main>
+
+<script>
+// <core>
+var MAXDIGITS = 15;
+var OPS = {
+  '+': function (a, b) { return a + b; },
+  '−': function (a, b) { return a - b; },
+  '×': function (a, b) { return a * b; },
+  '÷': function (a, b) { return b === 0 ? null : a / b; }
+};
+function tidy(n) { return parseFloat(Number(n).toPrecision(12)); }
+function numStr(n) {
+  var t = tidy(n);
+  var abs = Math.abs(t);
+  if (abs >= 1e15) return t.toExponential(6).replace(/\.?0+e/, 'e');
+  var s = String(t);
+  if (/e/.test(s)) s = t.toFixed(12).replace(/\.?0+$/, '');
+  return s;
+}
+function group(str) {
+  if (/e/i.test(str)) return str;
+  var neg = str.charAt(0) === '-';
+  var body = neg ? str.slice(1) : str;
+  var parts = body.split('.');
+  var gi = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return (neg ? '-' : '') + gi + (parts.length > 1 ? '.' + parts[1] : '');
+}
+function initial() { return { cur: '0', acc: null, op: null, overwrite: false, expr: '', error: false }; }
+function copy(s) { return { cur: s.cur, acc: s.acc, op: s.op, overwrite: s.overwrite, expr: s.expr, error: s.error }; }
+function failed() {
+  var s = initial();
+  s.cur = 'Cannot divide by zero';
+  s.error = true;
+  s.overwrite = true;
+  return s;
+}
+function reduce(state, action, v) {
+  var s = copy(state);
+  if (s.error) {
+    if (action === 'clear' || action === 'digit' || action === 'dot') s = initial();
+    else return { s: state, entry: null };
+  }
+  if (action === 'clear') return { s: initial(), entry: null };
+  if (action === 'digit') {
+    if (s.overwrite) { s.cur = v; s.overwrite = false; if (s.op === null) s.expr = ''; }
+    else if (s.cur === '0') s.cur = v;
+    else if (s.cur === '-0') s.cur = '-' + v;
+    else if (s.cur.replace(/[-.]/g, '').length < MAXDIGITS) s.cur += v;
+    return { s: s, entry: null };
+  }
+  if (action === 'dot') {
+    if (s.overwrite) { s.cur = '0.'; s.overwrite = false; if (s.op === null) s.expr = ''; }
+    else if (s.cur.indexOf('.') < 0) s.cur += '.';
+    return { s: s, entry: null };
+  }
+  if (action === 'back') {
+    if (s.overwrite) return { s: s, entry: null };
+    s.cur = s.cur.slice(0, -1);
+    if (s.cur === '' || s.cur === '-') s.cur = '0';
+    return { s: s, entry: null };
+  }
+  if (action === 'sign') {
+    if (s.cur === '0') return { s: s, entry: null };
+    s.cur = s.cur.charAt(0) === '-' ? s.cur.slice(1) : '-' + s.cur;
+    return { s: s, entry: null };
+  }
+  if (action === 'percent') {
+    var n = Number(s.cur);
+    var r = (s.op === '+' || s.op === '−') && s.acc !== null ? s.acc * n / 100 : n / 100;
+    s.cur = numStr(r);
+    s.overwrite = true;
+    return { s: s, entry: null };
+  }
+  if (action === 'op') {
+    if (s.op !== null && !s.overwrite) {
+      var res = OPS[s.op](s.acc, Number(s.cur));
+      if (res === null) return { s: failed(), entry: null };
+      s.acc = tidy(res);
+      s.cur = numStr(s.acc);
+    } else if (s.op === null) {
+      s.acc = Number(s.cur);
+    }
+    s.op = v;
+    s.overwrite = true;
+    s.expr = group(numStr(s.acc)) + ' ' + v;
+    return { s: s, entry: null };
+  }
+  if (action === 'equals') {
+    if (s.op === null) return { s: s, entry: null };
+    var b = Number(s.cur);
+    var out = OPS[s.op](s.acc, b);
+    if (out === null) return { s: failed(), entry: null };
+    out = tidy(out);
+    var text = group(numStr(s.acc)) + ' ' + s.op + ' ' + group(numStr(b));
+    var done = initial();
+    done.cur = numStr(out);
+    done.overwrite = true;
+    done.expr = text + ' =';
+    return { s: done, entry: { expr: text, result: done.cur } };
+  }
+  return { s: s, entry: null };
+}
+// </core>
+
+(function () {
+  var state = initial();
+  var history = [];
+  var KEY = 'everyday-calc-history-v1';
+
+  var exprEl = document.getElementById('expr');
+  var valueEl = document.getElementById('value');
+  var listEl = document.getElementById('history');
+  var emptyEl = document.getElementById('historyEmpty');
+  var clearBtn = document.getElementById('clearHistory');
+  var pad = document.getElementById('pad');
+
+  try {
+    var saved = JSON.parse(localStorage.getItem(KEY) || '[]');
+    if (Array.isArray(saved)) history = saved.filter(function (h) { return h && typeof h.expr === 'string' && typeof h.result === 'string'; }).slice(0, 30);
+  } catch (e) { history = []; }
+
+  function persist() {
+    try { localStorage.setItem(KEY, JSON.stringify(history)); } catch (e) {}
+  }
+
+  function renderScreen() {
+    var text = state.error ? state.cur : group(state.cur);
+    valueEl.textContent = text;
+    valueEl.classList.toggle('err', state.error);
+    exprEl.textContent = state.expr;
+    var n = text.length;
+    var size = n <= 9 ? 3 : n <= 12 ? 2.4 : n <= 16 ? 1.9 : 1.5;
+    valueEl.style.setProperty('--size', size + 'rem');
+  }
+
+  function renderHistory() {
+    listEl.textContent = '';
+    history.forEach(function (h) {
+      var li = document.createElement('li');
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('aria-label', 'Reuse result ' + h.result);
+      var e = document.createElement('span');
+      e.className = 'h-expr';
+      e.textContent = h.expr + ' =';
+      var r = document.createElement('span');
+      r.className = 'h-res';
+      r.textContent = group(h.result);
+      b.appendChild(e);
+      b.appendChild(r);
+      b.addEventListener('click', function () {
+        state = initial();
+        state.cur = h.result;
+        state.overwrite = true;
+        renderScreen();
+      });
+      li.appendChild(b);
+      listEl.appendChild(li);
+    });
+    emptyEl.hidden = history.length > 0;
+    clearBtn.hidden = history.length === 0;
+  }
+
+  function dispatch(action, v) {
+    var r = reduce(state, action, v);
+    state = r.s;
+    if (r.entry) {
+      history.unshift(r.entry);
+      history = history.slice(0, 30);
+      persist();
+      renderHistory();
+    }
+    renderScreen();
+  }
+
+  pad.addEventListener('click', function (ev) {
+    var btn = ev.target.closest('button[data-a]');
+    if (!btn) return;
+    dispatch(btn.dataset.a, btn.dataset.v);
+  });
+
+  clearBtn.addEventListener('click', function () {
+    history = [];
+    persist();
+    renderHistory();
+  });
+
+  function flash(btn) {
+    btn.classList.add('hit');
+    setTimeout(function () { btn.classList.remove('hit'); }, 110);
+  }
+
+  document.addEventListener('keydown', function (ev) {
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    var k = ev.key;
+    var action = null, v;
+    if (k >= '0' && k <= '9' && k.length === 1) { action = 'digit'; v = k; }
+    else if (k === '.' || k === ',') { action = 'dot'; k = '.'; }
+    else if (k === '+') { action = 'op'; v = '+'; }
+    else if (k === '-') { action = 'op'; v = '−'; }
+    else if (k === '*' || k === 'x' || k === 'X') { action = 'op'; v = '×'; k = '*'; }
+    else if (k === '/') { action = 'op'; v = '÷'; }
+    else if (k === 'Enter' || k === '=') { action = 'equals'; k = 'Enter'; }
+    else if (k === 'Backspace') { action = 'back'; }
+    else if (k === 'Escape' || k === 'Delete' || k === 'c' || k === 'C') { action = 'clear'; k = 'Escape'; }
+    else if (k === '%') { action = 'percent'; }
+    if (!action) return;
+    ev.preventDefault();
+    var btn = pad.querySelector('button[data-key="' + (k === '"' ? '\\"' : k) + '"]');
+    if (btn) flash(btn);
+    dispatch(action, v);
+  });
+
+  renderHistory();
+  renderScreen();
+})();
+</script>
+</body>
+</html>
